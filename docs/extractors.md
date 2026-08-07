@@ -88,7 +88,7 @@ Use [`src/graph/__tests__/extractor.test.ts`](../src/graph/__tests__/extractor.t
 
 ## Framework resolvers
 
-The frozen interface is [`src/graph/resolution/types.ts`](../src/graph/resolution/types.ts). The Express implementation in [`src/graph/resolution/frameworks/express.ts`](../src/graph/resolution/frameworks/express.ts) is the reference resolver.
+The frozen interface is [`src/graph/resolution/types.ts`](../src/graph/resolution/types.ts). The Express implementation in [`src/graph/resolution/frameworks/express.ts`](../src/graph/resolution/frameworks/express.ts) is the reference resolver. Spring Boot 4 (`src/graph/resolution/frameworks/spring-boot.ts`) and Hibernate 7 (`src/graph/resolution/frameworks/hibernate.ts`) are additional fixture-backed Java framework examples.
 
 A resolver should add only relationships that require framework knowledge. It must detect the framework from project evidence and return `null` when it cannot resolve a reference confidently.
 
@@ -113,6 +113,14 @@ When adding a language, document the grammar source and version.
 - **SHA-256:** matches `node_modules/tree-sitter-wasms@0.1.12/out/tree-sitter-rust.wasm` exactly
 - **Binary package license:** Unlicense
 - **Upstream grammar:** [tree-sitter/tree-sitter-rust](https://github.com/tree-sitter/tree-sitter-rust)
+- **Upstream grammar license:** MIT
+
+### Java
+- **Binary source:** `tree-sitter-wasms` package, version `0.1.12`
+- **Vendored path:** `src/graph/wasm/tree-sitter-java.wasm`
+- **SHA-256:** `637aac4415fb39a211a4f4292d63c66b5ce9c32fa2cd35464af4f681d91b9a1f` (matches `node_modules/tree-sitter-wasms@0.1.12/out/tree-sitter-java.wasm`)
+- **Binary package license:** Unlicense
+- **Upstream grammar:** [tree-sitter/tree-sitter-java](https://github.com/tree-sitter/tree-sitter-java)
 - **Upstream grammar license:** MIT
 
 ## Pull request proof
