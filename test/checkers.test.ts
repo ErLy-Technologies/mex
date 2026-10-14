@@ -301,6 +301,71 @@ describe("checkDependencies", () => {
     const issues = checkDependencies(claims, tmpDir);
     expect(issues).toHaveLength(0);
   });
+
+  describe("with Gradle build files", () => {
+    beforeEach(() => {
+      writeFileSync(
+        join(tmpDir, "build.gradle"),
+        `ext { v_spring = '5.3.39' }
+         dependencies {
+           compile group: 'org.springframework', name: 'spring-core', version: v_spring
+           compile group: 'org.springframework.webflow', name: 'spring-webflow', version: '2.5.1.RELEASE'
+           compile group: 'org.springframework.data', name: 'spring-data-jpa', version: '2.7.18'
+           compile group: 'org.hibernate', name: 'hibernate-core', version: '5.2.5.Final'
+           compile group: 'org.quartz-scheduler', name: 'quartz', version: '2.2.3'
+           compile 'com.stripe:stripe-java:33.4.2'
+           compile group: 'com.auth0', name: 'java-jwt', version: '3.8.1'
+           compileOnly 'org.projectlombok:lombok:1.18.8'
+         }`
+      );
+    });
+
+    it("matches artifact names, artifact families, groups and group/artifact claims", () => {
+      const claims = ["Lombok", "stripe-java", "Stripe", "Spring", "Hibernate", "Spring Data JPA", "Quartz", "auth0/java-jwt"]
+        .map((value) => claim({ kind: "dependency", value }));
+      expect(checkDependencies(claims, tmpDir)).toEqual([]);
+    });
+
+    it("still reports dependencies that are not declared", () => {
+      const claims = [claim({ kind: "dependency", value: "Braintree Java SDK" })];
+      const issues = checkDependencies(claims, tmpDir);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].code).toBe("DEPENDENCY_MISSING");
+    });
+
+    it("treats build tools and servers as known runtimes", () => {
+      const claims = ["Gradle", "Maven", "Tomcat"].map((value) => claim({ kind: "dependency", value }));
+      expect(checkDependencies(claims, tmpDir)).toEqual([]);
+    });
+
+    it("accepts a version claim when any artifact in the family matches", () => {
+      const claims = [
+        claim({ kind: "version", value: "Spring 5.3" }),
+        claim({ kind: "version", value: "Hibernate 5.2" }),
+      ];
+      expect(checkDependencies(claims, tmpDir)).toEqual([]);
+    });
+
+    it("reports a version mismatch against the declared Gradle version", () => {
+      const claims = [claim({ kind: "version", value: "Hibernate 6.4" })];
+      const issues = checkDependencies(claims, tmpDir);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].code).toBe("VERSION_MISMATCH");
+      expect(issues[0].message).toContain("5.2.5.Final");
+    });
+
+    it("skips version claims for known runtimes such as databases", () => {
+      writeFileSync(join(tmpDir, "build.gradle"), "compileOnly group: 'com.mysql', name: 'mysql-connector-j', version: '8.3.0'");
+      const claims = [claim({ kind: "version", value: "MySQL 5.6+" })];
+      expect(checkDependencies(claims, tmpDir)).toEqual([]);
+    });
+
+    it("does not apply family matching to npm packages", () => {
+      writeFileSync(join(tmpDir, "package.json"), JSON.stringify({ dependencies: { "react-dom": "^18.0.0" } }));
+      const claims = [claim({ kind: "dependency", value: "React" })];
+      expect(checkDependencies(claims, tmpDir)).toHaveLength(1);
+    });
+  });
 });
 
 // ── Cross-file Checker ──
