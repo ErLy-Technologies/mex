@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Drift check now reads Gradle builds for `DEPENDENCY_MISSING` and `VERSION_MISMATCH`. It parses the root `build.gradle` / `build.gradle.kts` and every subproject listed in `settings.gradle(.kts)` (or immediate subdirectories when there is no settings file). Both `'group:name:version'` and `group: 'g', name: 'n', version: 'v'` notations are read, and version variables from `ext { }`, `ext.x =`, `val`/`def` are resolved, including root variables used in subprojects.
+- Claims are matched to Gradle artifacts by artifact name (`Lombok`), artifact family (`Spring` → `spring-core`), spaced artifact name (`Spring Data JPA` → `spring-data-jpa`), group segment (`Stripe` → `com.stripe`) or `group/artifact` (`auth0/java-jwt`). npm matching is unchanged (exact package name).
+- `gradle`, `maven` and `tomcat` are treated as known runtimes.
+
+### Fixed
+- Version claims for known runtimes (e.g. `MySQL 5.6`) are no longer compared with a same-named package version (e.g. the MySQL JDBC driver).
+
 ## [0.7.1] - 2026-08-05
 
 ### Changed

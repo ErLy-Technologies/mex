@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Claim, DriftIssue } from "../../types.js";
+import { loadGradleDependencies } from "../../scanner/gradle.js";
 
 /** Runtimes, platforms, databases, protocols, and architectural terms that appear in stack docs but aren't installable packages */
 const KNOWN_RUNTIMES = new Set([
@@ -32,6 +33,7 @@ const KNOWN_RUNTIMES = new Set([
   "bootstrap", "sass", "less", "postcss",
   "webpack", "vite", "esbuild", "turbopack", "rollup", "parcel",
   "git", "github", "gitlab", "ci/cd", "nginx", "apache", "caddy",
+  "gradle", "maven", "tomcat",
   "linux", "macos", "windows", "wasm", "webassembly",
 ]);
 
@@ -54,14 +56,10 @@ export function checkDependencies(
   for (const claim of depClaims) {
     const name = claim.value.toLowerCase();
 
-    // Skip known runtimes/platforms — they won't be in package.json
+    // Skip known runtimes/platforms — they won't be in a manifest
     if (KNOWN_RUNTIMES.has(name)) continue;
 
-    // Fuzzy match: "React" → "react", "Express" → "express"
-    const found = deps.find(
-      (d) => d.name.toLowerCase() === name
-    );
-    if (!found) {
+    if (!deps.some((d) => matches(name, d))) {
       issues.push({
         code: "DEPENDENCY_MISSING",
         severity: "warning",
@@ -80,17 +78,18 @@ export function checkDependencies(
 
     const name = match[1].trim().toLowerCase();
     const claimedVersion = match[2];
-    const found = deps.find(
-      (d) => d.name.toLowerCase() === name
-    );
 
-    if (found && !found.version.includes(claimedVersion)) {
+    // "MySQL 5.6" is the server, not the JDBC driver in the manifest
+    if (KNOWN_RUNTIMES.has(name)) continue;
+    const found = deps.filter((d) => matches(name, d) && d.version);
+
+    if (found.length && !found.some((d) => d.version.includes(claimedVersion))) {
       issues.push({
         code: "VERSION_MISMATCH",
         severity: "warning",
         file: claim.source,
         line: claim.line,
-        message: `Claimed "${claim.value}" but manifest has version "${found.version}"`,
+        message: `Claimed "${claim.value}" but manifest has version "${found[0].version}"`,
         claim,
       });
     }
@@ -102,6 +101,32 @@ export function checkDependencies(
 interface DepEntry {
   name: string;
   version: string;
+  /** Maven group id; set only for Gradle dependencies */
+  group?: string;
+}
+
+/**
+ * Does a claimed name (lower-cased) refer to this dependency?
+ * npm: exact package name ("React" → "react").
+ * Gradle: artifact ("Lombok" → lombok), artifact family ("Spring" → spring-core),
+ * spaced artifact ("Spring Data JPA" → spring-data-jpa), group segment
+ * ("Stripe" → com.stripe) or group/artifact ("auth0/java-jwt").
+ */
+function matches(claimed: string, dep: DepEntry): boolean {
+  const artifact = dep.name.toLowerCase();
+  if (artifact === claimed) return true;
+  if (dep.group === undefined) return false;
+
+  const group = dep.group.toLowerCase();
+  const kebab = claimed.trim().replace(/\s+/g, "-");
+  const segments = group.split(".");
+  return (
+    artifact === kebab ||
+    artifact.startsWith(kebab + "-") ||
+    segments.includes(kebab) ||
+    claimed === `${segments[segments.length - 1]}/${artifact}` ||
+    claimed === `${group}:${artifact}`
+  );
 }
 
 function loadAllDependencies(projectRoot: string): DepEntry[] | null {
@@ -121,6 +146,10 @@ function loadAllDependencies(projectRoot: string): DepEntry[] | null {
     } catch {
       // skip
     }
+  }
+
+  for (const dep of loadGradleDependencies(projectRoot)) {
+    entries.push({ name: dep.name, version: dep.version, group: dep.group });
   }
 
   return entries.length ? entries : null;
